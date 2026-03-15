@@ -1,0 +1,58 @@
+services:
+    nawatech:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: nawatech-app
+        environment:
+            - APP_ENV=local
+            - OCTANE_SERVER=frankenphp
+            - WATCH_FILES=true # Optional: for hot reloading
+        ports:
+            - "8085:80"
+        volumes:
+            - ./:/app
+        networks:
+            - nawatech-network
+        working_dir: /app
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_started
+
+    postgres:
+        image: postgres:16
+        container_name: postgressql-nawatech
+        environment:
+            POSTGRES_PASSWORD: root
+            POSTGRES_DB: postgres
+            POSTGRES_USER: postgres
+        ports:
+            - "5432:5432"
+        volumes:
+            - nawatech-db:/var/lib/postgresql/data
+        networks:
+            - nawatech-network
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+    redis:
+        image: redis:7-alpine
+        container_name: redis-nawatech
+        networks:
+            - nawatech-network
+        volumes:
+            - redis-data:/data
+
+volumes:
+    nawatech-db:
+        name: volume-nawatech-db
+    redis-data:
+
+networks:
+    nawatech-network:
+        driver: bridge
