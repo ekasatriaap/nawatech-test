@@ -46,6 +46,11 @@ The easiest way to get started is by using Docker Compose. The setup is fully au
 > - Generate the application key
 > - Import database schema and data from `database.sql`
 > - Run database migrations (e.g., for `jobs` table)
+> - Automate setup while allowing the container to run as a **Web Server** or **Queue Worker**.
+
+The Docker setup now includes two application-related services:
+- `nawatech`: The main web application (Laravel Octane).
+- `worker`: The Laravel queue worker (running `queue:work`).
 
 ---
 
