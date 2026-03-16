@@ -34,38 +34,47 @@ wait_for_db() {
 
 wait_for_db
 
-# Check if users table exists
-TABLE_EXISTS=$(PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_name = 'users';" | tr -d '[:space:]')
-
-if [ "$TABLE_EXISTS" = "0" ]; then
-    echo "Database is empty. Running migrations first..."
-    php artisan migrate --force
-fi
+# Robust migration function: try to run all migrations, but don't stop if one fails
+# (useful when mixing manual SQL dumps with migrations)
+run_migrations() {
+    echo "Applying migrations..."
+    # First try a normal migrate (faster if it works)
+    if php artisan migrate --force; then
+        echo "All migrations applied successfully."
+    else
+        echo "Standard migration failed. Attempting to apply migrations individually..."
+        # Find all migration files and run them one by one
+        # This ensures that if 'users' table exists, it doesn't block 'jobs' table creation
+        for m in $(ls database/migrations/*.php | sort); do
+            echo "Processing migration: $m"
+            php artisan migrate --path="$m" --force || echo "Migration $m skipped or already exists."
+        done
+        echo "Individual migration pass completed."
+    fi
+}
 
 # Check if data import is needed
+# We check 'orders' table. If it doesn't exist, psql returns error, we catch it and assume 0.
 ORDER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -t -c "SELECT count(*) FROM orders;" 2>/dev/null | tr -d '[:space:]' || echo "0")
 
 if [ -z "$ORDER_COUNT" ] || [ "$ORDER_COUNT" = "0" ]; then
-    echo "Orders table is empty or doesn't exist. Importing database.sql..."
+    echo "Data import needed (Orders table is empty)."
+
+    # 1. Run migrations first to create schema and migrations table
+    run_migrations
+
+    # 2. Import database.sql (this will drop and recreate users, products, orders, order_items)
     if [ -f "database.sql" ]; then
-        # database.sql has DROP TABLE IF EXISTS CASCADE, so it's safe to run even if migrate ran
+        echo "Importing database.sql..."
         PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" < database.sql
-        echo "Database imported successfully."
-        
-        # After importing database.sql, we MUST run migrations again to ensure jobs table etc.
-        # because database.sql might have dropped them if it was a full dump (though unlikely for jobs)
-        # and we need to ensure the migrations table is in a consistent state.
-        echo "Running migrations after import..."
-        php artisan migrate --force
+        echo "Database data imported successfully."
     else
-        echo "Warning: database.sql not found, jumping to migrations."
-        php artisan migrate --force
+        echo "Warning: database.sql not found."
     fi
 else
-    echo "Orders table already has data ($ORDER_COUNT records). Running incremental migrations..."
-    # If migrations fail because a table exists but isn't in migrations table, 
-    # we try to run it but don't exit if it fails (common when users mix manual SQL and migrations)
-    php artisan migrate --force || echo "Migration failed, likely due to existing tables. Check your database state."
+    echo "Database already contains data ($ORDER_COUNT orders). Skipping SQL import."
+    # still run migrations to ensure jobs table exists if it was missed before
+    run_migrations
 fi
 
 # Cache configuration and routes
@@ -78,6 +87,9 @@ if [ $# -gt 0 ]; then
     echo "Running custom command: $@"
     exec "$@"
 else
+    echo "Starting Laravel Queue Worker..."
+    php artisan queue:work --verbose --tries=3 --timeout=90 &
+
     echo "Starting Laravel Octane..."
-    exec php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=80
+    exec php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=80 --admin-port=2019
 fi

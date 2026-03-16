@@ -21,24 +21,6 @@ services:
             redis:
                 condition: service_started
 
-    worker:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        container_name: nawatech-worker
-        command: php artisan queue:work --verbose --tries=3 --timeout=90
-        environment:
-            - APP_ENV=local
-        volumes:
-            - ./:/app
-        networks:
-            - nawatech-network
-        depends_on:
-            postgres:
-                condition: service_healthy
-            redis:
-                condition: service_started
-
     postgres:
         image: postgres:16
         container_name: postgressql-nawatech
