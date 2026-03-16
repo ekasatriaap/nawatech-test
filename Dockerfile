@@ -8,7 +8,8 @@ WORKDIR /app
 
 # Install system dependencies and PHP extensions
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/
-RUN install-php-extensions \
+RUN apt-get update && apt-get install -y postgresql-client && \
+    install-php-extensions \
     pdo_pgsql \
     pgsql \
     mbstring \
@@ -32,11 +33,12 @@ RUN useradd -m -s /bin/bash -G www-data dev && \
     chown -R dev:dev /app && \
     chmod -R 775 /app/storage /app/bootstrap/cache
 
-# Move entrypoint script and make executable
-RUN chmod +x /app/docker/entrypoint.sh
+# Copy and prepare entrypoint
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set entrypoint
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Optional: switch to dev user if needed, but often FrankenPHP needs root to bind ports
 # USER dev

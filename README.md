@@ -44,7 +44,7 @@ The easiest way to get started is by using Docker Compose. The setup is fully au
 > - Copy `.env.example` to `.env`
 > - Install PHP dependencies via Composer
 > - Generate the application key
-> - Run database migrations and seeders
+> - Import database schema and data from `database.sql`
 
 ---
 
@@ -76,11 +76,12 @@ If you prefer to run the application directly on your host machine:
 
     _Edit `.env` to configure your PostgreSQL and Redis connections._
 
-3. **Migrations and Seeding**:
-
-    ```bash
-    php artisan migrate --seed
-    ```
+3. **Migrations and Data Import**:
+   You can run migrations, or import the provided SQL dump:
+   ```bash
+   # Import the PostgreSQL dump
+   psql -U postgres -d postgres < database.sql
+   ```
 
 4. **Start the Server**:
    You can use the standard Laravel server or Octane (recommended):
