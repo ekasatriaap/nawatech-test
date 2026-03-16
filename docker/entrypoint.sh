@@ -16,8 +16,6 @@ if [ -z "$APP_KEY" ] && [ ! -f .env ] || ! grep -q "APP_KEY=base64" .env; then
     php artisan key:generate --no-interaction
 fi
 
-# Database initialization
-echo "Checking database status..."
 # Extract DB credentials from .env
 DB_HOST=$(grep DB_HOST .env | cut -d'=' -f2)
 DB_PORT=$(grep DB_PORT .env | cut -d'=' -f2)
@@ -25,19 +23,25 @@ DB_DATABASE=$(grep DB_DATABASE .env | cut -d'=' -f2)
 DB_USERNAME=$(grep DB_USERNAME .env | cut -d'=' -f2)
 DB_PASSWORD=$(grep DB_PASSWORD .env | cut -d'=' -f2)
 
-# Check if tables exist
-TABLE_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d '[:space:]' || echo "error")
+# Run migrations first (ensure jobs and other tables are created)
+echo "Running migrations..."
+php artisan migrate --force
 
-if [ "$TABLE_COUNT" = "0" ]; then
-    echo "Database is empty. Importing database.sql..."
+# Database data initialization
+echo "Checking if data import is needed..."
+# Check if orders table has any data. If it fails (e.g. table not migrated yet), it returns "error"
+ORDER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -t -c "SELECT count(*) FROM orders;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+
+if [ -z "$ORDER_COUNT" ] || [ "$ORDER_COUNT" = "0" ]; then
+    echo "Orders table is empty. Importing database.sql..."
     if [ -f "database.sql" ]; then
         PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" < database.sql
         echo "Database imported successfully."
     else
-        echo "Error: database.sql not found."
+        echo "Warning: database.sql not found, skipping data import."
     fi
 else
-    echo "Database already initialized or inaccessible (Count: $TABLE_COUNT). Skipping SQL import."
+    echo "Orders table already has data ($ORDER_COUNT records). Skipping SQL import."
 fi
 
 # Cache configuration and routes

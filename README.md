@@ -45,6 +45,7 @@ The easiest way to get started is by using Docker Compose. The setup is fully au
 > - Install PHP dependencies via Composer
 > - Generate the application key
 > - Import database schema and data from `database.sql`
+> - Run database migrations (e.g., for `jobs` table)
 
 ---
 
